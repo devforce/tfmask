@@ -79,7 +79,7 @@ var versionedExpressions = map[string]expression{
 			"^(.*?): (.*?) +\\[id=(.*?)\\]$",
 		),
 		reTfPlanLine: regexp.MustCompile(
-			"^( +)([ ~a-zA-Z0-9%._-]+)=( +)([\"<])(.*?)([>\"]) +-> +(\\()(.*)(\\))(.*)$",
+			"^( +)([ \"~a-zA-Z0-9%._-]+)=( +)([\"<])(.*?)([>\"]) +-> +(\\(?)(.*)(\\)?)(.*)$",
 		),
 		reTfPlanCurrentResource: regexp.MustCompile(
 			"^([~/+-]+) (.*?) +(.*) (.*) (.*)$",
@@ -147,6 +147,7 @@ func getCurrentResource(expression expression, currentResource, line string) str
 func processLine(expression expression, reTfResource,
 	reTfValues *regexp.Regexp, tfmaskChar, currentResource,
 	line string) string {
+
 	if expression.planStatusRegex.MatchString(line) {
 		line = planStatus(expression.planStatusRegex, reTfResource, tfmaskChar,
 			line)
@@ -175,6 +176,30 @@ func planStatus(planStatusRegex, reTfResource *regexp.Regexp, tfmaskChar,
 
 func matchFromLine(reTfPlanLine *regexp.Regexp, line string) match {
 	subMatch := reTfPlanLine.FindStringSubmatch(line)
+	var newValue, fourthQuote string
+
+	newValueRaw := subMatch[8]
+
+	// Check for trailing space
+	hasTrailingSpace := false
+	if newValueRaw[len(newValueRaw)-1:] == " " {
+		hasTrailingSpace = true
+		newValueRaw = strings.TrimSpace(newValueRaw)
+	}
+
+	if newValueRaw[len(newValueRaw)-1:] == ")" {
+		newValue = newValueRaw[0:len(newValueRaw)-1]
+		fourthQuote = ")"
+	} else {
+		newValue = subMatch[8]
+		fourthQuote = subMatch[9]
+	}
+
+	// If there's a trailing space, add it to the fourthQuote variable.
+	if hasTrailingSpace {
+		fourthQuote = fourthQuote + " "
+	}
+
 	return match{
 		leadingWhitespace:  subMatch[1],
 		property:           subMatch[2], // something like `stage.0.action.0.configuration.OAuthToken`
@@ -183,8 +208,8 @@ func matchFromLine(reTfPlanLine *regexp.Regexp, line string) match {
 		oldValue:           subMatch[5],
 		secondQuote:        subMatch[6], // > or "
 		thirdQuote:         subMatch[7], // < or " or (
-		newValue:           subMatch[8],
-		fourthQuote:        subMatch[9], // > or " or )
+		newValue:           newValue,
+		fourthQuote:        fourthQuote, // > or " or )
 		postfix:            subMatch[10],
 	}
 }
@@ -234,7 +259,7 @@ func assignmentLine(reMapKeyPair, reTfValues *regexp.Regexp, tfmaskChar, line st
 
 func maskValue(value, tfmaskChar string) string {
 	exclusions := []string{"sensitive", "computed", "<computed",
-		"known after apply"}
+		"known after apply", "null"}
 	if !contains(exclusions, value) {
 		return strings.Repeat(tfmaskChar,
 			utf8.RuneCountInString(value))

@@ -29,7 +29,7 @@ var lineTests = []struct {
 	{"random_id.some_id", " id:               \"VIxvs2TloohI2XtAsHyu68wQvFQQCTOGgsglqC7zKjsnOmUMIMrZ1y5J6ieOIzl-YXiS1_XmVc8J8gb9fIcwIA\" => <computed> (forces new resource)",
 		" id:               \"**************************************************************************************\" => <computed> (forces new resource)",
 		"0.11"},
-	// tf 0.12 ------------------------------------
+	//tf 0.12 ------------------------------------
 	{"random_id.some_id", "not_secret", "not_secret", "0.12"},
 	{"random_id.some_id", "      ~ result           = \"pkwemfpwmfwf\" -> (known after apply) ",
 		"      ~ result           = \"************\" -> (known after apply) ", "0.12"},
@@ -44,6 +44,12 @@ var lineTests = []struct {
 		"0.12"},
 	{"random_id.some_id", " ~ id =               \"VIxvs2TloohI2XtAsHyu68wQvFQQCTOGgsglqC7zKjsnOmUMIMrZ1y5J6ieOIzl-YXiS1_XmVc8J8gb9fIcwIA\" -> (known after apply)",
 		" ~ id =               \"**************************************************************************************\" -> (known after apply)",
+		"0.12"},
+	{"random_id.some_id", " - id =               \"VIxvs2TloohI2XtAsHyu68wQvFQQCTOGgsglqC7zKjsnOmUMIMrZ1y5J6ieOIzl-YXiS1_XmVc8J8gb9fIcwIA\" -> null",
+		" - id =               \"**************************************************************************************\" -> null",
+		"0.12"},
+	{"random_id.some_id", " - \"id\" = \"VIxvs2TloohI2XtAsHyu68wQvFQQCTOGgsglqC7zKjsnOmUMIMrZ1y5J6ieOIzl-YXiS1_XmVc8J8gb9fIcwIA\" -> null",
+		" - \"id\" = \"**************************************************************************************\" -> null",
 		"0.12"},
 	{"", "random_string.some_password: Creation complete after 0s [id=5s80SMs@JJpA8e/h]",
 		"random_string.some_password: Creation complete after 0s [id=****************]",
