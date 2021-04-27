@@ -79,7 +79,7 @@ var versionedExpressions = map[string]expression{
 			"^(.*?): (.*?) +\\[id=(.*?)\\]$",
 		),
 		reTfPlanLine: regexp.MustCompile(
-			"^( +)([ \"~a-zA-Z0-9%._-]+)=( +)([\"<])(.*?)([>\"]) +-> +(\\(?)(.*)(\\)?)(.*)$",
+			"^( +)([ \"~a-zA-Z0-9%._-]+)=( +)([\"<])(.*?)([>\"]) +->? +(\\(?)(.*)(\\)?)(.*)$",
 		),
 		reTfPlanCurrentResource: regexp.MustCompile(
 			"^([~/+-]+) (.*?) +(.*) (.*) (.*)$",
@@ -195,6 +195,20 @@ func matchFromLine(reTfPlanLine *regexp.Regexp, line string) match {
 		fourthQuote = subMatch[9]
 	}
 
+	// Handle plan lines that have 'forces replacement'
+	if strings.Contains(subMatch[8], "# forces replacement") {
+		if !regexp.MustCompile(`null # forces replacement`).MatchString(subMatch[8]) {
+			subMatch[7] = "\""
+			fourthQuote = "\" # forces replacement"
+		} else {
+			fourthQuote = " # forces replacement"
+		}
+
+		frRegex := regexp.MustCompile(`"?(.*?)"? # forces replacement`)
+		newValueSubMatch := frRegex.FindStringSubmatch(subMatch[8])
+		newValue = newValueSubMatch[1]
+	}
+
 	// If there's a trailing space, add it to the fourthQuote variable.
 	if hasTrailingSpace {
 		fourthQuote = fourthQuote + " "
@@ -228,6 +242,7 @@ func matchFromAssignment(reMapKeyPair *regexp.Regexp, line string) keyValueMatch
 func planLine(reTfPlanLine, reTfResource, reTfValues *regexp.Regexp,
 	currentResource, tfmaskChar, assign, operator, line string) string {
 	match := matchFromLine(reTfPlanLine, line)
+
 	if reTfValues.MatchString(match.property) ||
 		reTfResource.MatchString(currentResource) {
 		// The value inside the "...", <...> or (...)
@@ -240,6 +255,7 @@ func planLine(reTfPlanLine, reTfResource, reTfValues *regexp.Regexp,
 			match.secondQuote, operator, match.thirdQuote,
 			newValue, match.fourthQuote, match.postfix)
 	}
+
 	return line
 }
 
@@ -259,7 +275,7 @@ func assignmentLine(reMapKeyPair, reTfValues *regexp.Regexp, tfmaskChar, line st
 
 func maskValue(value, tfmaskChar string) string {
 	exclusions := []string{"sensitive", "computed", "<computed",
-		"known after apply", "null"}
+		"known after apply", "null", "forces replacement"}
 	if !contains(exclusions, value) {
 		return strings.Repeat(tfmaskChar,
 			utf8.RuneCountInString(value))
