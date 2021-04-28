@@ -226,8 +226,8 @@ var assignmentTests = []struct {
 		"0.12",
 	},
 	{
-		" \"foo_secret\" = \"123456\" # forces replacement",
-		" \"foo_secret\" = \"******\" # forces replacement",
+		" + \"foo_secret\" = \"123456\" # forces replacement",
+		" + \"foo_secret\" = \"******\" # forces replacement",
 		"0.12",
 	},
 }
