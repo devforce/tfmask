@@ -30,6 +30,7 @@ type keyValueMatch struct {
 	assignmentOperator      string
 	trailingWhitespaceAfter string
 	oldValue                string
+	postfix                 string
 }
 
 type expression struct {
@@ -68,7 +69,7 @@ var versionedExpressions = map[string]expression{
 			"^([~/+-]+) (.*?) +(.*)$",
 		),
 		reMapKeyPair: regexp.MustCompile(
-			"(?i)^(\\s+(?:[~+-] )?)(.*)(\\s?[=:])(\\s+)\"(.*)\"$",
+			"(?i)^(\\s+(?:[~+-] )?)(.*)(\\s?[=:])(\\s+)\"(.*)\"([\\s+]?.*)?$",
 		),
 		resourceIndex: 2,
 		assign:        ":",
@@ -79,13 +80,13 @@ var versionedExpressions = map[string]expression{
 			"^(.*?): (.*?) +\\[id=(.*?)\\]$",
 		),
 		reTfPlanLine: regexp.MustCompile(
-			"^( +)([ \"~a-zA-Z0-9%._-]+)=( +)([\"<])(.*?)([>\"]) +-> +(\\(?)(.*)(\\)?)(.*)$",
+			"^( +)([ +\"~a-zA-Z0-9%._-]+)=( +)([\"<])(.*?)([>\"])[\\s+]?->[\\s+]?(\\(?)(.*)(\\)?)(.*)$",
 		),
 		reTfPlanCurrentResource: regexp.MustCompile(
 			"^([~/+-]+) (.*?) +(.*) (.*) (.*)$",
 		),
 		reMapKeyPair: regexp.MustCompile(
-			"(?i)^(\\s+(?:[~+-] )?)(.*)(\\s=)(\\s+)\"(.*)\"$",
+			"(?i)^(\\s+(?:[~+-] )?)(.*)(\\s=)(\\s+)\"(.*)\"([\\s+]?.*)?$",
 		),
 		resourceIndex: 3,
 		assign:        "=",
@@ -188,11 +189,28 @@ func matchFromLine(reTfPlanLine *regexp.Regexp, line string) match {
 	}
 
 	if newValueRaw[len(newValueRaw)-1:] == ")" {
-		newValue = newValueRaw[0:len(newValueRaw)-1]
+		newValue = newValueRaw[0 : len(newValueRaw)-1]
 		fourthQuote = ")"
 	} else {
 		newValue = subMatch[8]
 		fourthQuote = subMatch[9]
+	}
+
+	// Handle plan lines that have '# forces replacement'
+	if strings.Contains(newValue, "# forces replacement") {
+		if regexp.MustCompile(`null # forces replacement`).MatchString(newValue) {
+			newValue = "null"
+			fourthQuote = " # forces replacement"
+		}
+
+		newValueForceReplace := regexp.MustCompile(`"?(.*?)"? # forces replacement`)
+		if newValueForceReplace.MatchString(newValue) {
+			subMatch[7] = "\""
+			fourthQuote = "\" # forces replacement"
+
+			newValueSubMatch := newValueForceReplace.FindStringSubmatch(subMatch[8])
+			newValue = newValueSubMatch[1]
+		}
 	}
 
 	// If there's a trailing space, add it to the fourthQuote variable.
@@ -222,12 +240,14 @@ func matchFromAssignment(reMapKeyPair *regexp.Regexp, line string) keyValueMatch
 		assignmentOperator:      subMatch[3],
 		trailingWhitespaceAfter: subMatch[4],
 		oldValue:                subMatch[5],
+		postfix:                 subMatch[6],
 	}
 }
 
 func planLine(reTfPlanLine, reTfResource, reTfValues *regexp.Regexp,
 	currentResource, tfmaskChar, assign, operator, line string) string {
 	match := matchFromLine(reTfPlanLine, line)
+
 	if reTfValues.MatchString(match.property) ||
 		reTfResource.MatchString(currentResource) {
 		// The value inside the "...", <...> or (...)
@@ -240,6 +260,7 @@ func planLine(reTfPlanLine, reTfResource, reTfValues *regexp.Regexp,
 			match.secondQuote, operator, match.thirdQuote,
 			newValue, match.fourthQuote, match.postfix)
 	}
+
 	return line
 }
 
@@ -247,19 +268,19 @@ func assignmentLine(reMapKeyPair, reTfValues *regexp.Regexp, tfmaskChar, line st
 	match := matchFromAssignment(reMapKeyPair, line)
 	if reTfValues.MatchString(match.property) {
 		maskedValue := maskValue(match.oldValue, tfmaskChar)
-		line = fmt.Sprintf("%v%v%v%v\"%v\"",
+		line = fmt.Sprintf("%v%v%v%v\"%v\"%v",
 			match.leadingWhitespace,
 			match.property,
 			match.assignmentOperator,
 			match.trailingWhitespaceAfter,
-			maskedValue)
+			maskedValue, match.postfix)
 	}
 	return line
 }
 
 func maskValue(value, tfmaskChar string) string {
 	exclusions := []string{"sensitive", "computed", "<computed",
-		"known after apply", "null"}
+		"known after apply", "null", "forces replacement", "# forces replacement "}
 	if !contains(exclusions, value) {
 		return strings.Repeat(tfmaskChar,
 			utf8.RuneCountInString(value))

@@ -54,6 +54,10 @@ var lineTests = []struct {
 	{"", "random_string.some_password: Creation complete after 0s [id=5s80SMs@JJpA8e/h]",
 		"random_string.some_password: Creation complete after 0s [id=****************]",
 		"0.12"},
+	{"random_id.some_id", "      ~ result           = \"asdasdsad\" -> \"asdasdsadedited\" # forces replacement ",
+		"      ~ result           = \"*********\" -> \"***************\" # forces replacement ", "0.12"},
+	{"random_id.some_id", "      ~ result           = \"asdasdsad\" -> null # forces replacement ",
+		"      ~ result           = \"*********\" -> null # forces replacement ", "0.12"},
 }
 
 func TestProcessLine(t *testing.T) {
@@ -219,6 +223,11 @@ var assignmentTests = []struct {
 	{
 		" \"foo_secret\" = \"123456\"",
 		" \"foo_secret\" = \"******\"",
+		"0.12",
+	},
+	{
+		" + \"foo_secret\" = \"123456\" # forces replacement",
+		" + \"foo_secret\" = \"******\" # forces replacement",
 		"0.12",
 	},
 }
